@@ -31,8 +31,8 @@ import (
 // Errors types returned by the Exec function on the client interface
 var (
 	ErrExec                        = errors.New("remote command execute error")
-	ErrExecNoServiceWithName       = fmt.Errorf("%w: no such service exists with that name", ErrExec)
-	ErrExecServiceNotRunning       = fmt.Errorf("%w: service with that name is not running", ErrExec)
+	ErrExecNoServiceWithName       = fmt.Errorf("%w: no such service exists with that Name", ErrExec)
+	ErrExecServiceNotRunning       = fmt.Errorf("%w: service with that Name is not running", ErrExec)
 	ErrExecCommandExecutionFailed  = fmt.Errorf("%w: command execution failed", ErrExec)
 	ErrExecCommandDoesNotExist     = fmt.Errorf("%w: command could not be executed because it does not exist", ErrExec)
 	ErrExecDeploymentNotYetRunning = fmt.Errorf("%w: deployment is not yet active", ErrExec)
@@ -43,7 +43,7 @@ var (
 
 var _ Client = (*nullClient)(nil)
 
-//go:generate mockery --name ReadClient
+//go:generate mockery --Name ReadClient
 type ReadClient interface {
 	LeaseStatus(context.Context, mtypes.LeaseID) (map[string]*ctypes.ServiceStatus, error)
 	ForwardedPortStatus(context.Context, mtypes.LeaseID) (map[string][]ctypes.ForwardedPortStatus, error)
@@ -63,7 +63,7 @@ type ReadClient interface {
 
 // Client interface lease and deployment methods
 //
-//go:generate mockery --name Client
+//go:generate mockery --Name Client
 type Client interface {
 	ReadClient
 	Deploy(ctx context.Context, lID mtypes.LeaseID, mgroup *mani.Group) error

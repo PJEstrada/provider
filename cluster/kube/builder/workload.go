@@ -2,6 +2,7 @@ package builder
 
 import (
 	"fmt"
+	"github.com/akash-network/provider/cluster/util"
 	"strings"
 
 	mani "github.com/akash-network/akash-api/go/manifest/v2beta2"
@@ -52,7 +53,14 @@ func newWorkloadBuilder(
 		serviceIdx: serviceIdx,
 	}
 }
-
+func (b *workload) addLeasedIpsToEnvList(envVars map[string]int, currentEnvVars []corev1.EnvVar) (map[string]int, []corev1.EnvVar) {
+	leasedIps := util.GetLeasedIpsFromDeploy(b.group)
+	for _, ip := range leasedIps {
+		ipEnvVarName := fmt.Sprintf("%s_%s", strings.ToUpper(ip.Name), "IP")
+		addIfNotPresent(envVars, currentEnvVars, ipEnvVarName, ip.Expose.IP)
+	}
+	return envVars, currentEnvVars
+}
 func (b *workload) container() corev1.Container {
 	falseValue := false
 
@@ -132,6 +140,10 @@ func (b *workload) container() corev1.Container {
 		}
 		envVarsAdded[parts[0]] = 0
 	}
+
+	// Add Leased IPs
+	envVarsAdded, kcontainer.Env = b.addLeasedIpsToEnvList(envVarsAdded, kcontainer.Env)
+
 	kcontainer.Env = b.addEnvVarsForDeployment(envVarsAdded, kcontainer.Env)
 
 	for _, expose := range service.Expose {

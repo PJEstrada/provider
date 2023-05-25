@@ -18,13 +18,13 @@ import (
 	mtypes "github.com/akash-network/akash-api/go/node/market/v1beta3"
 	"github.com/akash-network/node/pubsub"
 	sdlutil "github.com/akash-network/node/sdl/util"
-
 	kubeclienterrors "github.com/akash-network/provider/cluster/kube/errors"
 	ctypes "github.com/akash-network/provider/cluster/types/v1beta3"
 	"github.com/akash-network/provider/cluster/util"
 	clusterutil "github.com/akash-network/provider/cluster/util"
 	"github.com/akash-network/provider/event"
 	"github.com/akash-network/provider/manifest"
+	ipoptypes "github.com/akash-network/provider/operator/ipoperator/types"
 	"github.com/akash-network/provider/session"
 )
 
@@ -58,10 +58,10 @@ type deploymentManager struct {
 	client  Client
 	session session.Session
 
-	state deploymentState
-
-	lease  mtypes.LeaseID
-	mgroup *mani.Group
+	state        deploymentState
+	availableIPs []*ipoptypes.LeaseIPStatus
+	lease        mtypes.LeaseID
+	mgroup       *mani.Group
 
 	monitor          *deploymentMonitor
 	wg               sync.WaitGroup
@@ -151,7 +151,11 @@ func (dm *deploymentManager) handleUpdate(ctx context.Context) <-chan error {
 func (dm *deploymentManager) run(ctx context.Context) {
 	defer dm.lc.ShutdownCompleted()
 	var shutdownErr error
+	ipsList := util.GetLeasedIpsFromDeploy(dm.mgroup)
+	if len(ipsList) > 0 {
+		// Don't start deployment until IP's are ready.
 
+	}
 	runch := dm.startDeploy(ctx)
 
 	defer func() {
@@ -318,9 +322,9 @@ func (dm *deploymentManager) startTeardown() <-chan error {
 	})
 }
 
-type serviceExposeWithServiceName struct {
-	expose mani.ServiceExpose
-	name   string
+type ServiceExposeWithServiceName struct {
+	Expose mani.ServiceExpose
+	Name   string
 }
 
 func (dm *deploymentManager) doDeploy(ctx context.Context) ([]string, []string, error) {
@@ -395,10 +399,10 @@ func (dm *deploymentManager) doDeploy(ctx context.Context) ([]string, []string, 
 		blockedHostnames[hostname] = struct{}{}
 	}
 	hosts := make(map[string]mani.ServiceExpose)
-	leasedIPs := make([]serviceExposeWithServiceName, 0)
+	leasedIPs := make([]ServiceExposeWithServiceName, 0)
 	hostToServiceName := make(map[string]string)
 
-	ipsInThisRequest := make(map[string]serviceExposeWithServiceName)
+	ipsInThisRequest := make(map[string]ServiceExposeWithServiceName)
 	// clear this out so it gets repopulated
 	dm.currentHostnames = make(map[string]struct{})
 	// Iterate over each entry, extracting the ingress services & leased IPs
@@ -423,7 +427,7 @@ func (dm *deploymentManager) doDeploy(ctx context.Context) ([]string, []string, 
 			}
 
 			if expose.Global && len(expose.IP) != 0 {
-				v := serviceExposeWithServiceName{expose: expose, name: service.Name}
+				v := ServiceExposeWithServiceName{Expose: expose, Name: service.Name}
 				leasedIPs = append(leasedIPs, v)
 				sharingKey := clusterutil.MakeIPSharingKey(dm.lease, expose.IP)
 				ipsInThisRequest[sharingKey] = v
@@ -454,23 +458,23 @@ func (dm *deploymentManager) doDeploy(ctx context.Context) ([]string, []string, 
 
 	withheldEndpoints := make([]string, 0)
 	for _, serviceExpose := range leasedIPs {
-		endpointName := serviceExpose.expose.IP
+		endpointName := serviceExpose.Expose.IP
 		sharingKey := clusterutil.MakeIPSharingKey(dm.lease, endpointName)
 
-		externalPort := sdlutil.ExposeExternalPort(serviceExpose.expose)
-		port := serviceExpose.expose.Port
+		externalPort := sdlutil.ExposeExternalPort(serviceExpose.Expose)
+		port := serviceExpose.Expose.Port
 
-		err = dm.client.DeclareIP(ctx, dm.lease, serviceExpose.name, uint32(port), uint32(externalPort), serviceExpose.expose.Proto, sharingKey, false)
+		err = dm.client.DeclareIP(ctx, dm.lease, serviceExpose.Name, uint32(port), uint32(externalPort), serviceExpose.Expose.Proto, sharingKey, false)
 		if err != nil {
 			if !errors.Is(err, kubeclienterrors.ErrAlreadyExists) {
-				dm.log.Error("failed adding IP declaration", "service", serviceExpose.name, "port", externalPort, "endpoint", serviceExpose.expose.IP, "err", err)
+				dm.log.Error("failed adding IP declaration", "service", serviceExpose.Name, "port", externalPort, "endpoint", serviceExpose.Expose.IP, "err", err)
 				return withheldHostnames, nil, err
 			}
-			dm.log.Info("IP declaration already exists", "service", serviceExpose.name, "port", externalPort, "endpoint", serviceExpose.expose.IP, "err", err)
+			dm.log.Info("IP declaration already exists", "service", serviceExpose.Name, "port", externalPort, "endpoint", serviceExpose.Expose.IP, "err", err)
 			withheldEndpoints = append(withheldEndpoints, sharingKey)
 
 		} else {
-			dm.log.Debug("added IP declaration", "service", serviceExpose.name, "port", externalPort, "endpoint", serviceExpose.expose.IP)
+			dm.log.Debug("added IP declaration", "service", serviceExpose.Name, "port", externalPort, "endpoint", serviceExpose.Expose.IP)
 		}
 	}
 

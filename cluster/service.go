@@ -41,7 +41,7 @@ var (
 
 // Cluster is the interface that wraps Reserve and Unreserve methods
 //
-//go:generate mockery --name Cluster
+//go:generate mockery --Name Cluster
 type Cluster interface {
 	Reserve(mtypes.OrderID, atypes.ResourceGroup) (ctypes.Reservation, error)
 	Unreserve(mtypes.OrderID) error
@@ -55,7 +55,7 @@ type StatusClient interface {
 
 // Service manage compute cluster for the provider.  Will eventually integrate with kubernetes, etc...
 //
-//go:generate mockery --name Service
+//go:generate mockery --Name Service
 type Service interface {
 	StatusClient
 	Cluster
@@ -295,19 +295,19 @@ loop:
 
 				mgroup := ev.ManifestGroup()
 				if mgroup == nil {
-					s.log.Error("indeterminate manifest group", "lease", ev.LeaseID, "group-name", ev.Group.GroupSpec.Name)
+					s.log.Error("indeterminate manifest group", "lease", ev.LeaseID, "group-Name", ev.Group.GroupSpec.Name)
 					break
 				}
 
 				if _, err := s.inventory.lookup(ev.LeaseID.OrderID(), mgroup); err != nil {
-					s.log.Error("error looking up manifest", "err", err, "lease", ev.LeaseID, "group-name", mgroup.Name)
+					s.log.Error("error looking up manifest", "err", err, "lease", ev.LeaseID, "group-Name", mgroup.Name)
 					break
 				}
 
 				key := ev.LeaseID
 				if manager := s.managers[key]; manager != nil {
 					if err := manager.update(mgroup); err != nil {
-						s.log.Error("updating deployment", "err", err, "lease", ev.LeaseID, "group-name", mgroup.Name)
+						s.log.Error("updating deployment", "err", err, "lease", ev.LeaseID, "group-Name", mgroup.Name)
 					}
 					break
 				}
